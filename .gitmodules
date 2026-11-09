@@ -1,0 +1,3 @@
+[submodule "external/Helix.CMake"]
+	path = external/Helix.CMake
+	url = https://github.com/kisstp2006/Helix.CMake
