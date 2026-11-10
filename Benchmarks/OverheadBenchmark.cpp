@@ -1,4 +1,4 @@
-#include <helix/testing/bench.h>
+#include <Helix/Testing/Bench.h>
 
 HX_BENCH(EmptyLoop)
 {

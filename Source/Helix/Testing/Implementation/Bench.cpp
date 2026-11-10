@@ -1,4 +1,4 @@
-#include <helix/testing/bench.h>
+#include <Helix/Testing/Bench.h>
 
 #include <algorithm>
 #include <chrono>

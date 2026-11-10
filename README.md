@@ -6,7 +6,7 @@ standard library and Helix.CMake.
 ## Tests
 
 ```cpp
-#include <helix/testing/test.h>
+#include <Helix/Testing/Test.h>
 
 HX_TEST(Array, PushGrows)
 {
@@ -31,7 +31,7 @@ Runner options: `--filter=<text>` (matches `Suite.Name`), `--list`, `--junit=<fi
 ## Benchmarks
 
 ```cpp
-#include <helix/testing/bench.h>
+#include <Helix/Testing/Bench.h>
 
 HX_BENCH(SumArray)
 {
@@ -44,11 +44,19 @@ HX_BENCH(SumArray)
 Each benchmark is scaled until one run takes about 100 ms, then the best of three runs is
 reported as ns/op and ns/item.
 
+## Layout
+
+| Path | Contents |
+|---|---|
+| `Source/Helix/Testing/` | `Test.h`, `Bench.h` and their implementation |
+| `Source/Main/` | Runner entry points for `Helix::TestMain` and `Helix::BenchMain` |
+| `Tests/`, `Benchmarks/` | Self tests and overhead benchmarks |
+
 ## CMake
 
-`helix_add_test_suite(name DEPS ...)` builds every file in `tests/` against `Helix::TestMain`
+`helix_add_test_suite(name DEPS ...)` builds every file in `Tests/` against `Helix::TestMain`
 and registers it with CTest. `helix_add_benchmark_suite(name DEPS ...)` does the same for
-`bench/` with `Helix::BenchMain`.
+`Benchmarks/` with `Helix::BenchMain`.
 
 ## License
 
