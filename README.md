@@ -1,6 +1,6 @@
 # Helix.Testing
 
-Unit test and benchmark framework for the Helix repositories. No dependencies besides the C++
+Unit test, benchmark and fuzz framework for the Helix repositories. No dependencies besides the C++
 standard library and Helix.CMake.
 
 ## Tests
@@ -45,19 +45,47 @@ Only the `KeepRunning` loop is timed, so setup before it is free. Each benchmark
 run takes about 100 ms, then the best of three runs is
 reported as ns/op and ns/item.
 
+## Fuzzing
+
+```cpp
+#include <Helix/Testing/Fuzz.h>
+
+HX_FUZZ(PngDecoder)
+{
+    Array<u8> bytes = SamplePng();
+    usize size = bytes.Size();
+    bytes.Resize(size + 64);
+    bytes.Resize(round.Mutate(bytes.Data(), size, bytes.Size()));
+    round.Step("decode");
+    return DecodePng(bytes) ? 1 : 0;
+}
+```
+
+A round is reproducible from its number: `FuzzRound` makes the same random choices and the same
+mutations (bit flips, interesting bytes, copied runs, 16 and 32 bit values in both byte orders,
+inserts, deletes, truncation) every time. Round n runs target n % count. The return value counts
+the items the round got through.
+
+Runner options: `--seconds=<s>` or `--rounds=<n>`, `--first=<round>`, `--target=<name>`,
+`--progress=<file>` (the current round and target, written once a second and on a crash).
+A failed check, an abort, a crash or a round that runs for a minute prints the round, the target,
+the command that runs it again and the call stack (Windows and Linux). `HELIX_FUZZ_TRACE=1` prints
+every `round.Step`.
+
 ## Layout
 
 | Path | Contents |
 |---|---|
-| `Source/Helix/Testing/` | `Test.h`, `Bench.h` and their implementation |
-| `Source/Main/` | Runner entry points for `Helix::TestMain` and `Helix::BenchMain` |
-| `Tests/`, `Benchmarks/` | Self tests and overhead benchmarks |
+| `Source/Helix/Testing/` | `Test.h`, `Bench.h`, `Fuzz.h` and their implementation |
+| `Source/Main/` | Runner entry points for `Helix::TestMain`, `Helix::BenchMain` and `Helix::FuzzMain` |
+| `Tests/`, `Benchmarks/`, `Fuzz/` | Self tests, overhead benchmarks and a sample fuzz target |
 
 ## CMake
 
 `helix_add_test_suite(name DEPS ...)` builds every file in `Tests/` against `Helix::TestMain`
 and registers it with CTest. `helix_add_benchmark_suite(name DEPS ...)` does the same for
-`Benchmarks/` with `Helix::BenchMain`.
+`Benchmarks/` with `Helix::BenchMain`. `helix_add_fuzz_suite(name DEPS ... [ROUNDS n])` builds
+`Fuzz/` against `Helix::FuzzMain` and registers a short run of n rounds (40 by default) with CTest.
 
 ## License
 
