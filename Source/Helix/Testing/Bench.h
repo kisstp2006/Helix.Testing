@@ -13,15 +13,30 @@ namespace helix::testing
     public:
         explicit BenchState(std::uint64_t iterations) : remaining_(iterations), iterations_(iterations) {}
 
-        bool KeepRunning() { return remaining_-- > 0; }
+        // Only the loop is timed: the clock starts at the first call and stops at the call that ends the loop.
+        bool KeepRunning()
+        {
+            if (remaining_ == iterations_)
+                Start();
+            if (remaining_-- > 0)
+                return true;
+            Stop();
+            return false;
+        }
+        double ElapsedNanoseconds() const { return elapsed_; }
         std::uint64_t Iterations() const { return iterations_; }
         void SetItemsPerIteration(std::uint64_t items) { items_ = items; }
         std::uint64_t ItemsPerIteration() const { return items_; }
 
     private:
+        void Start();
+        void Stop();
+
         std::uint64_t remaining_;
         std::uint64_t iterations_;
         std::uint64_t items_ = 1;
+        std::int64_t start_ = 0;
+        double elapsed_ = -1.0;
     };
 
     struct BenchCase

@@ -19,8 +19,17 @@ namespace helix::testing
             bench.run(state);
             auto b = std::chrono::steady_clock::now();
             items = state.ItemsPerIteration();
-            return std::chrono::duration<double, std::nano>(b - a).count();
+            double loop = state.ElapsedNanoseconds();
+            return loop >= 0.0 ? loop : std::chrono::duration<double, std::nano>(b - a).count();
         }
+    }
+
+    void BenchState::Start() { start_ = std::chrono::steady_clock::now().time_since_epoch().count(); }
+
+    void BenchState::Stop()
+    {
+        auto now = std::chrono::steady_clock::now().time_since_epoch();
+        elapsed_ = std::chrono::duration<double, std::nano>(now - std::chrono::steady_clock::duration(start_)).count();
     }
 
     BenchRegistrar::BenchRegistrar(BenchCase& bench)

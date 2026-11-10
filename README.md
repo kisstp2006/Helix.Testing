@@ -41,7 +41,8 @@ HX_BENCH(SumArray)
 }
 ```
 
-Each benchmark is scaled until one run takes about 100 ms, then the best of three runs is
+Only the `KeepRunning` loop is timed, so setup before it is free. Each benchmark is scaled until one
+run takes about 100 ms, then the best of three runs is
 reported as ns/op and ns/item.
 
 ## Layout
