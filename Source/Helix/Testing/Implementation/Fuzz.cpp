@@ -24,6 +24,7 @@
 #endif
 #elif defined(__linux__) && !defined(__ANDROID__)
 #include <execinfo.h>
+#include <pthread.h>
 #include <unistd.h>
 #define HX_FUZZ_BACKTRACE 1
 #endif
@@ -59,17 +60,15 @@ namespace helix::testing
             }
         }
 
-        void PrintStack()
-        {
 #ifdef _WIN32
+        void PrintFrames(void* const* frames, unsigned count)
+        {
             HANDLE process = GetCurrentProcess();
             SymSetOptions(SYMOPT_LOAD_LINES | SYMOPT_UNDNAME);
             SymInitialize(process, nullptr, TRUE);
-            void* frames[48];
-            USHORT count = CaptureStackBackTrace(2, 48, frames, nullptr);
             alignas(SYMBOL_INFO) char storage[sizeof(SYMBOL_INFO) + 256];
             SYMBOL_INFO* symbol = reinterpret_cast<SYMBOL_INFO*>(storage);
-            for (USHORT i = 0; i < count; i++)
+            for (unsigned i = 0; i < count; i++)
             {
                 symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
                 symbol->MaxNameLen = 255;
@@ -81,12 +80,70 @@ namespace helix::testing
                 bool placed = SymGetLineFromAddr64(process, address, &column, &location);
                 std::fprintf(stderr, "    %s  %s:%lu\n", named ? symbol->Name : "?", placed ? location.FileName : "?", placed ? location.LineNumber : 0ul);
             }
+        }
+
+        // The thread that runs the rounds, for the stack of a hanging round.
+        HANDLE mainThread = nullptr;
+#elif defined(HX_FUZZ_BACKTRACE)
+        pthread_t mainThread;
+        std::atomic<bool> stackPrinted{false};
+
+        void OnStackRequest(int)
+        {
+            void* frames[48];
+            int count = backtrace(frames, 48);
+            backtrace_symbols_fd(frames, count, STDERR_FILENO);
+            stackPrinted.store(true);
+        }
+#endif
+
+        void PrintStack()
+        {
+#ifdef _WIN32
+            void* frames[48];
+            USHORT count = CaptureStackBackTrace(2, 48, frames, nullptr);
+            PrintFrames(frames, count);
 #elif defined(HX_FUZZ_BACKTRACE)
             void* frames[48];
             int count = backtrace(frames, 48);
             backtrace_symbols_fd(frames, count, STDERR_FILENO);
 #endif
         }
+
+#if HX_FUZZ_WATCHDOG
+        // The stack of the thread that runs the rounds, printed from the watchdog while that thread hangs.
+        void PrintHangingStack()
+        {
+#if defined(_WIN32) && (defined(_M_X64) || defined(__x86_64__))
+            if (!mainThread || SuspendThread(mainThread) == DWORD(-1))
+                return;
+            CONTEXT context{};
+            context.ContextFlags = CONTEXT_FULL;
+            if (GetThreadContext(mainThread, &context))
+            {
+                SymInitialize(GetCurrentProcess(), nullptr, TRUE);
+                STACKFRAME64 frame{};
+                frame.AddrPC.Offset = context.Rip;
+                frame.AddrPC.Mode = AddrModeFlat;
+                frame.AddrFrame.Offset = context.Rbp;
+                frame.AddrFrame.Mode = AddrModeFlat;
+                frame.AddrStack.Offset = context.Rsp;
+                frame.AddrStack.Mode = AddrModeFlat;
+                void* frames[48];
+                unsigned count = 0;
+                while (count < 48 && StackWalk64(IMAGE_FILE_MACHINE_AMD64, GetCurrentProcess(), mainThread, &frame, &context, nullptr,
+                                                 SymFunctionTableAccess64, SymGetModuleBase64, nullptr) &&
+                       frame.AddrPC.Offset != 0)
+                    frames[count++] = reinterpret_cast<void*>(frame.AddrPC.Offset);
+                PrintFrames(frames, count);
+            }
+#elif defined(HX_FUZZ_BACKTRACE)
+            pthread_kill(mainThread, SIGUSR2);
+            for (int i = 0; i < 40 && !stackPrinted.load(); i++)
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+#endif
+        }
+#endif
 
         void Report(const char* what)
         {
@@ -129,9 +186,14 @@ namespace helix::testing
             _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
 #endif
             std::signal(SIGABRT, &OnSignal);
+            DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &mainThread, 0, FALSE, DUPLICATE_SAME_ACCESS);
 #else
             for (int code : {SIGABRT, SIGSEGV, SIGFPE, SIGILL})
                 std::signal(code, &OnSignal);
+#endif
+#ifdef HX_FUZZ_BACKTRACE
+            mainThread = pthread_self();
+            std::signal(SIGUSR2, &OnStackRequest);
 #endif
         }
 
@@ -300,6 +362,7 @@ namespace helix::testing
                     WriteProgress();
                     std::fprintf(stderr, "fuzz round %llu of %s hangs\n    again: %s --first=%llu --rounds=1 --target=%s\n",
                                  static_cast<unsigned long long>(now), currentTarget.load(), program, static_cast<unsigned long long>(now), currentTarget.load());
+                    PrintHangingStack();
                     std::fflush(stderr);
                     std::_Exit(3);
                 }
