@@ -79,6 +79,7 @@ every `round.Step`.
 | `Source/Helix/Testing/` | `Test.h`, `Bench.h`, `Fuzz.h` and their implementation |
 | `Source/Main/` | Runner entry points for `Helix::TestMain`, `Helix::BenchMain` and `Helix::FuzzMain` |
 | `Tests/`, `Benchmarks/`, `Fuzz/` | Self tests, overhead benchmarks and a sample fuzz target |
+| `Tools/FuzzSupervisor.py` | Long fuzz runs: finds the exact round of each crash or hang (also AddressSanitizer reports), keeps its report and goes on from the next round |
 
 ## CMake
 
